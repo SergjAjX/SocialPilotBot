@@ -1,17 +1,22 @@
 from aiogram import Router, types
 from aiogram.filters import Command
+from bot.services.openrouter_fallback import OpenRouterClient
+from bot.database.db import save_user
 
 router = Router()
+client = OpenRouterClient()
 
 @router.message(Command("optimize"))
 async def optimize_text(message: types.Message):
-    args = message.text.split(maxsplit=2)
-    if len(args) < 3:
-        await message.answer("📝 Используй: /optimize [платформа] [текст]\nПример: /optimize telegram Привет, это мой пост...")
+    save_user(message.from_user.id, message.from_user.username)
+    args = message.text.split(maxsplit=1)
+    if len(args) < 2:
+        await message.answer("📝 Напиши текст после команды, например:\n/optimize Мой пост о фитнесе")
         return
     
-    platform = args[1]
-    text = args[2]
+    text = args[1]
+    prompt = f"Оптимизируй этот текст для соцсетей, сделай его более привлекательным и добавь эмодзи:\n\n{text}"
     
-    # Здесь будет вызов модели
-    await message.answer(f"🔄 Оптимизирую текст для {platform}...\n\n(Функция в разработке, используй /idea пока)")
+    await message.answer("✨ Оптимизирую текст...")
+    response = await client.ask(prompt)
+    await message.answer(f"📝 Вот оптимизированный вариант:\n\n{response}")
