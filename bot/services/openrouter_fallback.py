@@ -14,7 +14,7 @@ MODELS = [
 
 class OpenRouterClient:
     def __init__(self):
-        self.api_key = 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
+        self.api_key = os.getenv("OPENROUTER_API_KEY")
         
         self.url = "https://openrouter.ai/api/v1/chat/completions"
         self.session = None
