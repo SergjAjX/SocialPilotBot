@@ -1,5 +1,6 @@
 import os
 import aiohttp
+import asyncio
 import logging
 from typing import Optional
 from pathlib import Path
@@ -11,13 +12,27 @@ logger = logging.getLogger(__name__)
 env_path = Path(__file__).parent.parent.parent / '.env'
 load_dotenv(dotenv_path=env_path)
 
-# Актуальные бесплатные модели на январь 2026
+# Новые бесплатные модели (обновлено на июнь 2026)
 MODELS = [
-    "google/gemini-2.0-flash-exp:free",
-    "google/gemini-flash-1.5",
-    "meta-llama/llama-3.2-3b-instruct:free",
-    "qwen/qwen-2.5-7b-instruct:free",
-    "mistralai/mistral-7b-instruct:free",
+    # Быстрые и надежные для генерации идей
+    "google/gemma-3-27b-it:free",
+    "x-ai/grok-3-mini-beta:free",
+    "meta-llama/llama-4-scout:free",
+    
+    # Качественные для написания текстов
+    "deepseek/deepseek-chat-v3-0324:free",
+    "mistralai/mistral-small-3.1-24b-instruct:free",
+    "nousresearch/hermes-3-llama-3.1-70b:free",
+    
+    # Мощные как резерв
+    "qwen/qwen3-235b-a22b:free",
+    "deepseek/deepseek-r1:free",
+    "meta-llama/llama-4-maverick:free",
+    
+    # Специализированные
+    "qwen/qwen3-coder:free",
+    "openai/gpt-oss-120b:free",
+    "nvidia/nemotron-3-super-120b-a12b:free",
 ]
 
 class OpenRouterClient:
@@ -30,6 +45,7 @@ class OpenRouterClient:
         logger.info(f"🔑 API ключ найден: {'✅ ДА' if api_key else '❌ НЕТ'}")
         if api_key:
             logger.info(f"🔑 Ключ: {api_key[:15]}...{api_key[-5:]}")
+        logger.info(f"📋 Доступно моделей: {len(MODELS)}")
     
     async def _get_session(self):
         if self.session is None or self.session.closed:
@@ -50,11 +66,11 @@ class OpenRouterClient:
         logger.info(f"🚀 Отправляю запрос к OpenRouter")
         logger.info(f"📝 Промпт: {prompt[:100]}...")
         
-        for model in MODELS:
+        for idx, model in enumerate(MODELS, 1):
             try:
-                logger.info(f"🔄 Пробую модель: {model}")
+                logger.info(f"🔄 [{idx}/{len(MODELS)}] Пробую модель: {model}")
                 session = await self._get_session()
-                timeout = aiohttp.ClientTimeout(total=20)
+                timeout = aiohttp.ClientTimeout(total=25)
                 
                 headers = {
                     "Authorization": f"Bearer {api_key}",
@@ -94,11 +110,11 @@ class OpenRouterClient:
                         logger.warning(f"Ответ: {response_text[:300]}")
                         
             except asyncio.TimeoutError:
-                logger.error(f"⏱️ {model}: таймаут (20 сек)")
+                logger.error(f"⏱️ {model}: таймаут (25 сек)")
                 continue
             except Exception as e:
                 logger.error(f"❌ {model}: {type(e).__name__}: {e}")
                 continue
         
-        logger.error("❌ Все модели недоступны")
+        logger.error("❌ Все 12 моделей недоступны")
         return "⚠️ Все модели временно недоступны. Попробуй через минуту."
