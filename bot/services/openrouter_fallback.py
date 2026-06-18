@@ -8,31 +8,17 @@ from dotenv import load_dotenv
 
 logger = logging.getLogger(__name__)
 
-# Загружаем .env
 env_path = Path(__file__).parent.parent.parent / '.env'
 load_dotenv(dotenv_path=env_path)
 
-# Новые бесплатные модели (обновлено на июнь 2026)
+# Обновлены модели (реально работающие на free)
 MODELS = [
-    # Быстрые и надежные для генерации идей
-    "google/gemma-3-27b-it:free",
+    "google/gemma-4-31b-it:free",  # ✅ Работает (проверено)
     "x-ai/grok-3-mini-beta:free",
     "meta-llama/llama-4-scout:free",
-    
-    # Качественные для написания текстов
     "deepseek/deepseek-chat-v3-0324:free",
     "mistralai/mistral-small-3.1-24b-instruct:free",
     "nousresearch/hermes-3-llama-3.1-70b:free",
-    
-    # Мощные как резерв
-    "qwen/qwen3-235b-a22b:free",
-    "deepseek/deepseek-r1:free",
-    "meta-llama/llama-4-maverick:free",
-    
-    # Специализированные
-    "qwen/qwen3-coder:free",
-    "openai/gpt-oss-120b:free",
-    "nvidia/nemotron-3-super-120b-a12b:free",
 ]
 
 class OpenRouterClient:
@@ -70,7 +56,7 @@ class OpenRouterClient:
             try:
                 logger.info(f"🔄 [{idx}/{len(MODELS)}] Пробую модель: {model}")
                 session = await self._get_session()
-                timeout = aiohttp.ClientTimeout(total=25)
+                timeout = aiohttp.ClientTimeout(total=30)  # Увеличил до 30 сек
                 
                 headers = {
                     "Authorization": f"Bearer {api_key}",
@@ -105,16 +91,23 @@ class OpenRouterClient:
                         else:
                             logger.warning(f"⚠️ {model}: нет choices в ответе")
                             logger.debug(f"Ответ: {response_text[:300]}")
+                    elif resp.status == 429:
+                        logger.warning(f"⚠️ {model}: 429 Rate Limit (ждём 2 сек)")
+                        await asyncio.sleep(2)  # Ждём перед следующей моделью
+                        continue
                     else:
                         logger.warning(f"⚠️ {model}: ошибка {resp.status}")
                         logger.warning(f"Ответ: {response_text[:300]}")
                         
             except asyncio.TimeoutError:
-                logger.error(f"⏱️ {model}: таймаут (25 сек)")
+                logger.error(f"⏱️ {model}: таймаут (30 сек)")
                 continue
             except Exception as e:
                 logger.error(f"❌ {model}: {type(e).__name__}: {e}")
                 continue
+            
+            # Добавляю задержку между попытками, чтобы не превысить rate limit
+            await asyncio.sleep(1)
         
-        logger.error("❌ Все 12 моделей недоступны")
+        logger.error("❌ Все модели недоступны")
         return "⚠️ Все модели временно недоступны. Попробуй через минуту."
