@@ -4,24 +4,35 @@ import logging
 from pathlib import Path
 from dotenv import load_dotenv
 
-env_path = Path(__file__).parent.parent / '.env'
-load_dotenv(dotenv_path=env_path)
+# === Загружаем .env ТОЛЬКО для локальной разработки ===
+# На сервере переменные приходят из Repository Secrets
+if not os.getenv("RAILWAY_ENVIRONMENT"):  # Проверка, что мы НЕ на Railway
+    env_path = Path(__file__).parent.parent / '.env'
+    if env_path.exists():
+        load_dotenv(dotenv_path=env_path)
+        print(f"📂 Загружен локальный .env")
 
 logging.basicConfig(
     level=logging.INFO,
     format='%(asctime)s - %(name)s - %(levelname)s - %(message)s'
 )
 
+# === Получаем ключи из переменных окружения ===
 BOT_TOKEN = os.getenv("BOT_TOKEN")
 OPENROUTER_API_KEY = os.getenv("OPENROUTER_API_KEY")
 HF_TOKEN = os.getenv("HF_TOKEN")
 
+# === Проверка ключей ===
 print(f"🔑 BOT_TOKEN: {'✅' if BOT_TOKEN else '❌'}")
 print(f"🔑 OPENROUTER_API_KEY: {'✅' if OPENROUTER_API_KEY else '❌'}")
 print(f"🔑 HF_TOKEN: {'✅' if HF_TOKEN else '❌'}")
 
 if not BOT_TOKEN:
-    raise ValueError("❌ BOT_TOKEN не найден в .env файле")
+    raise ValueError(
+        "❌ BOT_TOKEN не найден!\n"
+        "Локально: добавь в .env\n"
+        "На сервере: добавь в Repository Secrets"
+    )
 
 from aiogram import Bot, Dispatcher
 from aiogram.types import BotCommand
