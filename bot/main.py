@@ -1,39 +1,40 @@
-
 import asyncio
 import os
 import logging
+from pathlib import Path
 from dotenv import load_dotenv
 
-# === КРИТИЧНО ВАЖНО: load_dotenv() ДОЛЖЕН БЫТЬ ПЕРЕД ВСЕМИ ИМПОРТАМИ ===
-load_dotenv()
+env_path = Path(__file__).parent.parent / '.env'
+load_dotenv(dotenv_path=env_path)
 
 logging.basicConfig(
     level=logging.INFO,
     format='%(asctime)s - %(name)s - %(levelname)s - %(message)s'
 )
 
-# Проверяем наличие токенов сразу
 BOT_TOKEN = os.getenv("BOT_TOKEN")
 OPENROUTER_API_KEY = os.getenv("OPENROUTER_API_KEY")
+HF_TOKEN = os.getenv("HF_TOKEN")
+
+print(f"🔑 BOT_TOKEN: {'✅' if BOT_TOKEN else '❌'}")
+print(f"🔑 OPENROUTER_API_KEY: {'✅' if OPENROUTER_API_KEY else '❌'}")
+print(f"🔑 HF_TOKEN: {'✅' if HF_TOKEN else '❌'}")
 
 if not BOT_TOKEN:
     raise ValueError("❌ BOT_TOKEN не найден в .env файле")
 
-if not OPENROUTER_API_KEY:
-    logging.warning("⚠️ OPENROUTER_API_KEY не найден. Бот запустится, но AI-функции не будут работать.")
-
 from aiogram import Bot, Dispatcher
 from aiogram.types import BotCommand
 
-# Импортируем обработчики (теперь .env уже загружен)
-from bot.handlers import start, idea, optimize
+from bot.handlers import start, idea, optimize, model
 from bot.database.db import init_db
 
 
 async def set_commands(bot: Bot):
-    """Устанавливаем команды бота"""
     commands = [
         BotCommand(command="start", description="Запустить бота"),
+        BotCommand(command="provider", description="Выбрать AI провайдера"),
+        BotCommand(command="model", description="Выбрать AI модель"),
         BotCommand(command="idea", description="Сгенерировать идеи для поста"),
         BotCommand(command="optimize", description="Оптимизировать текст поста"),
     ]
@@ -41,25 +42,19 @@ async def set_commands(bot: Bot):
 
 
 async def main():
-    """Основная функция запуска бота"""
-    # Инициализация базы данных
     init_db()
     
-    # Создаём экземпляры бота и диспетчера
     bot = Bot(token=BOT_TOKEN, parse_mode="HTML")
     dp = Dispatcher()
     
-    # Регистрируем роутеры
     dp.include_routers(
         start.router,
+        model.router,
         idea.router,
         optimize.router
     )
     
-    # Устанавливаем команды
     await set_commands(bot)
-    
-    # Удаляем вебхук и запускаем polling
     await bot.delete_webhook(drop_pending_updates=True)
     
     logging.info("✅ SocialPilotBot успешно запущен!")
