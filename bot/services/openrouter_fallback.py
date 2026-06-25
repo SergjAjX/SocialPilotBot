@@ -8,18 +8,46 @@ from dotenv import load_dotenv
 
 logger = logging.getLogger(__name__)
 
+# Загружаем .env
 env_path = Path(__file__).parent.parent.parent / '.env'
 load_dotenv(dotenv_path=env_path)
 
-# Обновлены модели (реально работающие на free)
-MODELS = [
-    "google/gemma-4-31b-it:free",  # ✅ Работает (проверено)
-    "x-ai/grok-3-mini-beta:free",
-    "meta-llama/llama-4-scout:free",
-    "deepseek/deepseek-chat-v3-0324:free",
-    "mistralai/mistral-small-3.1-24b-instruct:free",
-    "nousresearch/hermes-3-llama-3.1-70b:free",
-]
+# Бесплатные модели Hugging Face через OpenRouter
+MODELS = {
+    "1": {
+        "name": "🚀 Llama 3.2 3B (быстрая)",
+        "model": "meta-llama/llama-3.2-3b-instruct:free",
+        "description": "Быстрая и легкая модель. Идеальна для простых задач и генерации идей.",
+        "context": "128K"
+    },
+    "2": {
+        "name": "💎 Gemma 2 2B (Google)",
+        "model": "google/gemma-2-2b-it:free",
+        "description": "Компактная модель от Google. Отлично подходит для саммари и кратких ответов.",
+        "context": "8K"
+    },
+    "3": {
+        "name": "🧠 Mistral 7B (универсальная)",
+        "model": "mistralai/mistral-7b-instruct:free",
+        "description": "Универсальная модель. Хороша для написания текстов и креативных задач.",
+        "context": "32K"
+    },
+    "4": {
+        "name": "⚡ Phi-3 Mini (Microsoft)",
+        "model": "microsoft/phi-3-mini-128k-instruct:free",
+        "description": "Мощная компактная модель от Microsoft. Отлична для кода и аналитики.",
+        "context": "128K"
+    },
+    "5": {
+        "name": "🎯 Zephyr 7B (HuggingFace)",
+        "model": "huggingfaceh4/zephyr-7b-beta:free",
+        "description": "Модель от Hugging Face. Хороша для диалогов и ролеплея.",
+        "context": "8K"
+    },
+}
+
+# Модель по умолчанию
+DEFAULT_MODEL = "1"
 
 class OpenRouterClient:
     def __init__(self):
@@ -42,72 +70,75 @@ class OpenRouterClient:
         if self.session and not self.session.closed:
             await self.session.close()
     
-    async def ask(self, prompt: str, max_tokens: int = 500) -> Optional[str]:
+    def get_models_list(self) -> str:
+        """Возвращает список моделей для отображения"""
+        result = "🤖 <b>Доступные модели:</b>\n\n"
+        for key, data in MODELS.items():
+            result += f"<b>{key}.</b> {data['name']}\n"
+            result += f"   {data['description']}\n"
+            result += f"   📏 Контекст: {data['context']}\n\n"
+        result += "💡 Используй /model <номер> для выбора модели"
+        return result
+    
+    async def ask(self, prompt: str, model_key: str = DEFAULT_MODEL, max_tokens: int = 500) -> Optional[str]:
         api_key = os.getenv("OPENROUTER_API_KEY")
         
         if not api_key:
             logger.error("❌ OPENROUTER_API_KEY не найден!")
             return "❌ API ключ не найден. Проверь файл .env"
         
+        # Получаем модель из словаря
+        model_data = MODELS.get(model_key, MODELS[DEFAULT_MODEL])
+        model_name = model_data["model"]
+        
         logger.info(f"🚀 Отправляю запрос к OpenRouter")
+        logger.info(f"🤖 Модель: {model_data['name']} ({model_name})")
         logger.info(f"📝 Промпт: {prompt[:100]}...")
         
-        for idx, model in enumerate(MODELS, 1):
-            try:
-                logger.info(f"🔄 [{idx}/{len(MODELS)}] Пробую модель: {model}")
-                session = await self._get_session()
-                timeout = aiohttp.ClientTimeout(total=30)  # Увеличил до 30 сек
-                
-                headers = {
-                    "Authorization": f"Bearer {api_key}",
-                    "Content-Type": "application/json",
-                    "HTTP-Referer": "https://github.com/sergjajx/SocialPilotBot",
-                    "X-Title": "SocialPilotBot"
-                }
-                
-                payload = {
-                    "model": model,
-                    "messages": [{"role": "user", "content": prompt}],
-                    "max_tokens": max_tokens,
-                    "temperature": 0.7
-                }
-                
-                async with session.post(
-                    self.url,
-                    headers=headers,
-                    json=payload,
-                    timeout=timeout
-                ) as resp:
-                    logger.info(f"📡 {model}: статус {resp.status}")
-                    
-                    response_text = await resp.text()
-                    
-                    if resp.status == 200:
-                        data = await resp.json()
-                        if "choices" in data and len(data["choices"]) > 0:
-                            result = data["choices"][0]["message"]["content"]
-                            logger.info(f"✅ {model} вернула ответ ({len(result)} символов)")
-                            return result
-                        else:
-                            logger.warning(f"⚠️ {model}: нет choices в ответе")
-                            logger.debug(f"Ответ: {response_text[:300]}")
-                    elif resp.status == 429:
-                        logger.warning(f"⚠️ {model}: 429 Rate Limit (ждём 2 сек)")
-                        await asyncio.sleep(2)  # Ждём перед следующей моделью
-                        continue
-                    else:
-                        logger.warning(f"⚠️ {model}: ошибка {resp.status}")
-                        logger.warning(f"Ответ: {response_text[:300]}")
-                        
-            except asyncio.TimeoutError:
-                logger.error(f"⏱️ {model}: таймаут (30 сек)")
-                continue
-            except Exception as e:
-                logger.error(f"❌ {model}: {type(e).__name__}: {e}")
-                continue
+        try:
+            session = await self._get_session()
+            timeout = aiohttp.ClientTimeout(total=25)
             
-            # Добавляю задержку между попытками, чтобы не превысить rate limit
-            await asyncio.sleep(1)
+            headers = {
+                "Authorization": f"Bearer {api_key}",
+                "Content-Type": "application/json",
+                "HTTP-Referer": "https://github.com/sergjajx/SocialPilotBot",
+                "X-Title": "SocialPilotBot"
+            }
+            
+            payload = {
+                "model": model_name,
+                "messages": [{"role": "user", "content": prompt}],
+                "max_tokens": max_tokens,
+                "temperature": 0.7
+            }
+            
+            async with session.post(
+                self.url,
+                headers=headers,
+                json=payload,
+                timeout=timeout
+            ) as resp:
+                logger.info(f"📡 {model_name}: статус {resp.status}")
+                
+                response_text = await resp.text()
+                
+                if resp.status == 200:
+                    data = await resp.json()
+                    if "choices" in data and len(data["choices"]) > 0:
+                        result = data["choices"][0]["message"]["content"]
+                        logger.info(f"✅ {model_name} вернула ответ ({len(result)} символов)")
+                        return result
+                    else:
+                        logger.warning(f"⚠️ {model_name}: нет choices в ответе")
+                        logger.debug(f"Ответ: {response_text[:300]}")
+                else:
+                    logger.warning(f"⚠️ {model_name}: ошибка {resp.status}")
+                    logger.warning(f"Ответ: {response_text[:300]}")
+                    
+        except asyncio.TimeoutError:
+            logger.error(f"⏱️ {model_name}: таймаут (25 сек)")
+        except Exception as e:
+            logger.error(f"❌ {model_name}: {type(e).__name__}: {e}")
         
-        logger.error("❌ Все модели недоступны")
-        return "⚠️ Все модели временно недоступны. Попробуй через минуту."
+        return f"⚠️ Модель {model_data['name']} временно недоступна. Попробуй другую модель через /model"
