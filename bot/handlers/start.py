@@ -1,5 +1,3 @@
-
-python
 from aiogram import Router, types, F
 from aiogram.filters import Command
 from aiogram.types import InlineKeyboardMarkup, InlineKeyboardButton
@@ -96,9 +94,16 @@ async def show_models_callback(callback: types.CallbackQuery):
             text += f"   {data['description']}\n"
             text += f"   📏 Контекст: {data['context']}\n\n"
     
-    text += "💡 Используй /model &lt;номер&gt; для выбора"
+    text += "💡 Используй /model &lt;номер&gt; для выбора\n\n"
+    text += "[◀️ Назад](/start)"
     
-    await callback.message.answer(text, parse_mode="HTML")
+    # ✅ ИСПРАВЛЕНО: используем edit_text вместо answer
+    try:
+        await callback.message.edit_text(text, parse_mode="HTML")
+    except Exception:
+        # Если edit не сработал, отправляем новое сообщение
+        await callback.message.answer(text, parse_mode="HTML")
+    
     await callback.answer()
 
 
@@ -122,7 +127,12 @@ async def show_settings(callback: types.CallbackQuery):
         f"Выбери провайдера:"
     )
     
-    await callback.message.answer(text, parse_mode="HTML", reply_markup=keyboard)
+    # ✅ ИСПРАВЛЕНО: используем edit_text
+    try:
+        await callback.message.edit_text(text, parse_mode="HTML", reply_markup=keyboard)
+    except Exception:
+        await callback.message.answer(text, parse_mode="HTML", reply_markup=keyboard)
+    
     await callback.answer()
 
 
@@ -132,13 +142,19 @@ async def set_provider_or(callback: types.CallbackQuery):
     set_user_provider(callback.from_user.id, "openrouter")
     set_user_model(callback.from_user.id, "1")
     
-    await callback.message.answer(
+    text = (
         "✅ <b>Провайдер изменён!</b>\n\n"
         "🌐 Теперь используется: <b>OpenRouter</b>\n"
-        f"🤖 Модель: {OR_MODELS['1']['name']}",
-        parse_mode="HTML"
+        f"🤖 Модель: {OR_MODELS['1']['name']}"
     )
-    await callback.answer()
+    
+    # ✅ ИСПРАВЛЕНО: используем edit_text
+    try:
+        await callback.message.edit_text(text, parse_mode="HTML")
+    except Exception:
+        await callback.message.answer(text, parse_mode="HTML")
+    
+    await callback.answer("✅ OpenRouter активирован!")
 
 
 @router.callback_query(F.data == "set_provider_hf")
@@ -147,25 +163,24 @@ async def set_provider_hf(callback: types.CallbackQuery):
     set_user_provider(callback.from_user.id, "huggingface")
     set_user_model(callback.from_user.id, "1")
     
-    await callback.message.answer(
+    text = (
         "✅ <b>Провайдер изменён!</b>\n\n"
         "🤗 Теперь используется: <b>Hugging Face</b>\n"
-        f"🤖 Модель: {HF_MODELS['1']['name']}",
-        parse_mode="HTML"
+        f"🤖 Модель: {HF_MODELS['1']['name']}"
     )
-    await callback.answer()
+    
+    # ✅ ИСПРАВЛЕНО: используем edit_text
+    try:
+        await callback.message.edit_text(text, parse_mode="HTML")
+    except Exception:
+        await callback.message.answer(text, parse_mode="HTML")
+    
+    await callback.answer("✅ Hugging Face активирован!")
 
 
 @router.callback_query(F.data == "back_to_start")
 async def back_to_start(callback: types.CallbackQuery):
-    """Вернуться к старту — удаляем старое и отправляем новое"""
-    try:
-        await callback.message.delete()
-    except Exception:
-        pass  # Если не удалось удалить — ничего страшного
-    
-    # Создаём фейковое message-событие для повторного использования cmd_start
-    # Проще: отправляем новое приветствие
+    """Вернуться к старту — редактируем текущее сообщение"""
     provider_name, model_name = _get_current_settings(callback.from_user.id)
     
     keyboard = InlineKeyboardMarkup(inline_keyboard=[
@@ -184,26 +199,46 @@ async def back_to_start(callback: types.CallbackQuery):
         f"🤖 Модель: {model_name}\n\n"
         f"💡 <b>Команды:</b>\n"
         f"/idea &lt;тема&gt; — идеи для поста\n"
-        f"/optimize &lt;текст&gt; — улучшить текст"
+        f"/optimize &lt;текст&gt; — улучшить текст\n"
+        f"/model — выбрать модель\n"
+        f"/provider — сменить провайдера"
     )
     
-    await callback.message.answer(
-        welcome_text,
-        parse_mode="HTML",
-        reply_markup=keyboard,
-        disable_web_page_preview=True
-    )
+    # ✅ ИСПРАВЛЕНО: используем edit_text вместо answer
+    try:
+        await callback.message.edit_text(
+            welcome_text,
+            parse_mode="HTML",
+            reply_markup=keyboard
+        )
+    except Exception:
+        # Если edit не сработал (например, сообщение старое), отправляем новое
+        await callback.message.answer(
+            welcome_text,
+            parse_mode="HTML",
+            reply_markup=keyboard
+        )
+    
     await callback.answer()
 
 
 @router.callback_query(F.data == "quick_idea")
 async def quick_idea(callback: types.CallbackQuery):
     """Быстрая генерация идеи"""
-    await callback.message.answer(
+    text = (
         "💡 <b>Введи тему для генерации идей:</b>\n\n"
         "Например: фитнес, маркетинг, путешествия\n\n"
-        "Используй команду: /idea &lt;твоя тема&gt;",
-        parse_mode="HTML"
+        "Используй команду: /idea &lt;твоя тема&gt;"
     )
+    
+    keyboard = InlineKeyboardMarkup(inline_keyboard=[
+        [InlineKeyboardButton(text="◀️ Назад", callback_data="back_to_start")]
+    ])
+    
+    # ✅ ИСПРАВЛЕНО: используем edit_text
+    try:
+        await callback.message.edit_text(text, parse_mode="HTML", reply_markup=keyboard)
+    except Exception:
+        await callback.message.answer(text, parse_mode="HTML", reply_markup=keyboard)
+    
     await callback.answer()
-```
