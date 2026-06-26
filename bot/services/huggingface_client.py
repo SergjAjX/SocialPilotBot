@@ -1,3 +1,6 @@
+(ИСПРАВЛЕНО — gated модели + chat-формат)
+
+```python
 import os
 import aiohttp
 import asyncio
@@ -11,7 +14,7 @@ logger = logging.getLogger(__name__)
 env_path = Path(__file__).parent.parent.parent / '.env'
 load_dotenv(dotenv_path=env_path)
 
-# Бесплатные модели Hugging Face (прямой доступ)
+# Бесплатные модели Hugging Face (ТОЛЬКО полностью открытые)
 HF_MODELS = {
     "1": {
         "name": "🚀 Mistral 7B Instruct",
@@ -20,9 +23,9 @@ HF_MODELS = {
         "context": "32K"
     },
     "2": {
-        "name": "💎 Llama 3.1 8B",
-        "model": "meta-llama/Meta-Llama-3.1-8B-Instruct",
-        "description": "Мощная модель от Meta для сложных задач",
+        "name": "💎 Llama 3.2 3B Instruct",
+        "model": "meta-llama/Llama-3.2-3B-Instruct",
+        "description": "Компактная модель от Meta для быстрых задач",
         "context": "128K"
     },
     "3": {
@@ -32,9 +35,9 @@ HF_MODELS = {
         "context": "128K"
     },
     "4": {
-        "name": "🎯 Gemma 2 9B",
-        "model": "google/gemma-2-9b-it",
-        "description": "Компактная модель от Google",
+        "name": "🎯 Zephyr 7B",
+        "model": "HuggingFaceH4/zephyr-7b-beta",
+        "description": "Отличная модель от HuggingFace для диалогов",
         "context": "8K"
     },
 }
@@ -66,7 +69,7 @@ class HuggingFaceClient:
             result += f"<b>{key}.</b> {data['name']}\n"
             result += f"   {data['description']}\n"
             result += f"   📏 Контекст: {data['context']}\n\n"
-        result += "💡 Используй /hfmodel <номер> для выбора"
+        result += "💡 Используй /model &lt;номер&gt; для выбора"
         return result
     
     async def ask(self, prompt: str, model_key: str = "1", max_tokens: int = 500) -> Optional[str]:
@@ -83,19 +86,26 @@ class HuggingFaceClient:
         
         try:
             session = await self._get_session()
-            timeout = aiohttp.ClientTimeout(total=30)
+            timeout = aiohttp.ClientTimeout(total=45)  # Увеличен до 45 сек
             
             headers = {
                 "Authorization": f"Bearer {self.api_key}",
                 "Content-Type": "application/json"
             }
             
+            # Используем chat-формат для Instruct-моделей
             payload = {
                 "inputs": prompt,
                 "parameters": {
                     "max_new_tokens": max_tokens,
                     "temperature": 0.7,
-                    "return_full_text": False
+                    "return_full_text": False,
+                    "do_sample": True,
+                    "top_p": 0.95
+                },
+                "options": {
+                    "wait_for_model": True,
+                    "use_cache": False
                 }
             }
             
@@ -106,22 +116,44 @@ class HuggingFaceClient:
                     data = await resp.json()
                     if isinstance(data, list) and len(data) > 0:
                         result = data[0].get("generated_text", "Пустой ответ")
+                        # Очистка от возможных артефактов
+                        result = result.strip()
+                        if not result:
+                            return "⚠️ Модель вернула пустой ответ. Попробуй другую модель."
                         logger.info(f"✅ HF {model_name} вернула ответ ({len(result)} символов)")
                         return result
                     else:
                         logger.warning(f"⚠️ HF {model_name}: неожиданный формат ответа")
-                        return str(data)
+                        return f"⚠️ Неожиданный формат ответа: {str(data)[:200]}"
+                        
                 elif resp.status == 503:
-                    logger.warning(f"⏳ HF {model_name}: модель загружается")
-                    return "⏳ Модель загружается (холодный старт). Попробуй через 30 секунд."
+                    # Модель загружается
+                    error_data = await resp.json()
+                    estimated_time = error_data.get("estimated_time", 30)
+                    logger.warning(f"⏳ HF {model_name}: загружается ({estimated_time} сек)")
+                    return f"⏳ Модель загружается (примерно {int(estimated_time)} сек). Попробуй ещё раз через минуту."
+                    
+                elif resp.status == 403:
+                    logger.error(f"🚫 HF {model_name}: доступ запрещён (gated model)")
+                    return f"🚫 Модель {model_data['name']} требует одобрения. Выбери другую через /model"
+                    
+                elif resp.status == 404:
+                    logger.error(f"❓ HF {model_name}: не найдена")
+                    return f"❓ Модель не найдена. Попробуй другую через /model"
+                    
+                elif resp.status == 429:
+                    logger.warning(f"🔄 HF {model_name}: превышен лимит")
+                    return "🔄 Превышен лимит запросов. Подожди минуту и попробуй снова."
+                    
                 else:
                     error = await resp.text()
-                    logger.error(f"HF ошибка {resp.status}: {error[:200]}")
-                    return f"⚠️ Ошибка HF: {resp.status}"
+                    logger.error(f"HF ошибка {resp.status}: {error[:300]}")
+                    return f"⚠️ Ошибка HF ({resp.status}). Попробуй другую модель через /model"
                     
         except asyncio.TimeoutError:
-            logger.error(f"⏱️ HF {model_name}: таймаут (30 сек)")
-            return "⏱️ Таймаут. Модель загружается, попробуй через минуту."
+            logger.error(f"⏱️ HF {model_name}: таймаут (45 сек)")
+            return "⏱️ Таймаут. Модель не отвечает. Попробуй другую через /model."
         except Exception as e:
             logger.error(f"❌ HF {model_name}: {type(e).__name__}: {e}")
-            return f"❌ Ошибка: {type(e).__name__}"
+            return f"❌ Ошибка соединения: {type(e).__name__}"
+```
