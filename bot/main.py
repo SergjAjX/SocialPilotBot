@@ -5,12 +5,13 @@ from pathlib import Path
 from dotenv import load_dotenv
 
 # === Загружаем .env ТОЛЬКО для локальной разработки ===
-# На сервере переменные приходят из Repository Secrets
-if not os.getenv("RAILWAY_ENVIRONMENT"):  # Проверка, что мы НЕ на Railway
+if not os.getenv("RAILWAY_ENVIRONMENT"):
     env_path = Path(__file__).parent.parent / '.env'
     if env_path.exists():
         load_dotenv(dotenv_path=env_path)
-        print(f"📂 Загружен локальный .env")
+        print(f"📂 Загружен локальный .env из: {env_path}")
+    else:
+        print(f"⚠️ Локальный .env не найден: {env_path}")
 
 logging.basicConfig(
     level=logging.INFO,
