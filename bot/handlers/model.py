@@ -8,33 +8,63 @@ router = Router()
 or_client = OpenRouterClient()
 hf_client = HuggingFaceClient()
 
+
 @router.message(Command("model"))
-async def cmd_model(message: types.Message):
-    """Показать информацию о провайдерах и моделях"""
+async def handle_model(message: types.Message):
+    """Обработчик команды /model - показывает список или выбирает модель"""
+    args = message.text.split(maxsplit=1)
     provider = get_user_provider(message.from_user.id)
-    model_key = get_user_model(message.from_user.id)
     
-    provider_name = "🌐 OpenRouter" if provider == "openrouter" else "🤗 Hugging Face"
+    # Если указан номер - выбираем модель
+    if len(args) >= 2:
+        model_key = args[1].strip()
+        
+        if provider == "openrouter":
+            if model_key not in OR_MODELS:
+                await message.answer(
+                    f"❌ Модель '{model_key}' не найдена.\n\n" + or_client.get_models_list(),
+                    parse_mode="HTML"
+                )
+                return
+            set_user_model(message.from_user.id, model_key)
+            model_name = OR_MODELS[model_key]['name']
+        else:
+            if model_key not in HF_MODELS:
+                await message.answer(
+                    f"❌ Модель '{model_key}' не найдена.\n\n" + hf_client.get_models_list(),
+                    parse_mode="HTML"
+                )
+                return
+            set_user_model(message.from_user.id, model_key)
+            model_name = HF_MODELS[model_key]['name']
+        
+        await message.answer(
+            f"✅ <b>Модель изменена!</b>\n\n"
+            f"🤖 Теперь используется: <b>{model_name}</b>\n\n"
+            f"💡 Попробуй: /idea маркетинг",
+            parse_mode="HTML"
+        )
+        return
+    
+    # Если номер не указан - показываем список
+    current_model = get_user_model(message.from_user.id)
     
     if provider == "openrouter":
-        model_name = OR_MODELS.get(model_key, OR_MODELS['1'])['name']
+        current_name = OR_MODELS.get(current_model, OR_MODELS['1'])['name']
+        models_list = or_client.get_models_list()
     else:
-        model_name = HF_MODELS.get(model_key, HF_MODELS['1'])['name']
+        current_name = HF_MODELS.get(current_model, HF_MODELS['1'])['name']
+        models_list = hf_client.get_models_list()
     
-    text = (
-        f"🎯 <b>Настройки AI:</b>\n\n"
-        f"📡 <b>Провайдер:</b> {provider_name}\n"
-        f"🤖 <b>Модель:</b> {model_name}\n\n"
-        f"💡 <b>Команды:</b>\n"
-        f"/provider — выбрать провайдера\n"
-        f"/model <номер> — выбрать модель"
+    await message.answer(
+        f"🎯 <b>Текущая модель:</b> {current_name}\n\n" + models_list,
+        parse_mode="HTML"
     )
-    
-    await message.answer(text, parse_mode="HTML")
+
 
 @router.message(Command("provider"))
-async def cmd_provider(message: types.Message):
-    """Выбрать провайдера"""
+async def handle_provider(message: types.Message):
+    """Обработчик команды /provider - выбирает провайдера"""
     args = message.text.split(maxsplit=1)
     
     if len(args) < 2:
@@ -81,55 +111,3 @@ async def cmd_provider(message: types.Message):
         )
     else:
         await message.answer("❌ Неверный выбор. Используй /provider 1 или /provider 2")
-
-@router.message(Command("model"))
-async def select_model(message: types.Message):
-    """Выбрать модель по номеру"""
-    args = message.text.split(maxsplit=1)
-    
-    if len(args) < 2:
-        # Показать список моделей для текущего провайдера
-        provider = get_user_provider(message.from_user.id)
-        current_model = get_user_model(message.from_user.id)
-        
-        if provider == "openrouter":
-            current_name = OR_MODELS.get(current_model, OR_MODELS['1'])['name']
-            models_list = or_client.get_models_list()
-        else:
-            current_name = HF_MODELS.get(current_model, HF_MODELS['1'])['name']
-            models_list = hf_client.get_models_list()
-        
-        await message.answer(
-            f"🎯 <b>Текущая модель:</b> {current_name}\n\n" + models_list,
-            parse_mode="HTML"
-        )
-        return
-    
-    model_key = args[1].strip()
-    provider = get_user_provider(message.from_user.id)
-    
-    if provider == "openrouter":
-        if model_key not in OR_MODELS:
-            await message.answer(
-                f"❌ Модель '{model_key}' не найдена.\n\n" + or_client.get_models_list(),
-                parse_mode="HTML"
-            )
-            return
-        set_user_model(message.from_user.id, model_key)
-        model_name = OR_MODELS[model_key]['name']
-    else:
-        if model_key not in HF_MODELS:
-            await message.answer(
-                f"❌ Модель '{model_key}' не найдена.\n\n" + hf_client.get_models_list(),
-                parse_mode="HTML"
-            )
-            return
-        set_user_model(message.from_user.id, model_key)
-        model_name = HF_MODELS[model_key]['name']
-    
-    await message.answer(
-        f"✅ <b>Модель изменена!</b>\n\n"
-        f"🤖 Теперь используется: <b>{model_name}</b>\n\n"
-        f"💡 Попробуй: /idea маркетинг",
-        parse_mode="HTML"
-    )
