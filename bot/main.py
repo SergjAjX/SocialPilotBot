@@ -1,3 +1,4 @@
+
 import asyncio
 import os
 import logging
@@ -9,24 +10,24 @@ if not os.getenv("RAILWAY_ENVIRONMENT"):
     env_path = Path(__file__).parent.parent / '.env'
     if env_path.exists():
         load_dotenv(dotenv_path=env_path)
-        print(f"📂 Загружен локальный .env из: {env_path}")
-    else:
-        print(f"⚠️ Локальный .env не найден: {env_path}")
+        # Убрали print отсюда
 
 logging.basicConfig(
     level=logging.INFO,
     format='%(asctime)s - %(name)s - %(levelname)s - %(message)s'
 )
 
+logger = logging.getLogger(__name__)
+
 # === Получаем ключи из переменных окружения ===
 BOT_TOKEN = os.getenv("BOT_TOKEN")
 OPENROUTER_API_KEY = os.getenv("OPENROUTER_API_KEY")
 HF_TOKEN = os.getenv("HF_TOKEN")
 
-# === Проверка ключей ===
-print(f"🔑 BOT_TOKEN: {'✅' if BOT_TOKEN else '❌'}")
-print(f"🔑 OPENROUTER_API_KEY: {'✅' if OPENROUTER_API_KEY else '❌'}")
-print(f"🔑 HF_TOKEN: {'✅' if HF_TOKEN else '❌'}")
+# === Логирование вместо print ===
+logger.info(f"🔑 BOT_TOKEN: {'✅' if BOT_TOKEN else '❌'}")
+logger.info(f"🔑 OPENROUTER_API_KEY: {'✅' if OPENROUTER_API_KEY else '❌'}")
+logger.info(f"🔑 HF_TOKEN: {'✅' if HF_TOKEN else '❌'}")
 
 if not BOT_TOKEN:
     raise ValueError(
@@ -69,7 +70,7 @@ async def main():
     await set_commands(bot)
     await bot.delete_webhook(drop_pending_updates=True)
     
-    logging.info("✅ SocialPilotBot успешно запущен!")
+    logger.info("✅ SocialPilotBot успешно запущен!")
     await dp.start_polling(bot)
 
 
