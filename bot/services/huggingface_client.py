@@ -1,6 +1,4 @@
-(ИСПРАВЛЕНО — gated модели + chat-формат)
 
-```python
 import os
 import aiohttp
 import asyncio
