@@ -1,88 +1,86 @@
+
 import sqlite3
-import os
-import logging
-
-logger = logging.getLogger(__name__)
-
-DB_PATH = os.path.join(os.path.dirname(__file__), "socialpilot.db")
-
+from datetime import datetime
+from config import DB_PATH
 
 def init_db():
-    """Инициализация базы данных с миграцией"""
-    with sqlite3.connect(DB_PATH) as conn:
-        # Создаём таблицу если не существует
-        conn.execute("""
-            CREATE TABLE IF NOT EXISTS users (
-                user_id INTEGER PRIMARY KEY,
-                username TEXT,
-                requests INTEGER DEFAULT 1,
-                provider TEXT DEFAULT 'openrouter',
-                selected_model TEXT DEFAULT '1',
-                joined_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
-            )
-        """)
-        
-        # Проверяем существование колонок (миграция для старых БД)
-        cursor = conn.execute("PRAGMA table_info(users)")
-        columns = [row[1] for row in cursor.fetchall()]
-        
-        if 'provider' not in columns:
-            logger.info("🔄 Миграция: добавляю колонку 'provider'")
-            conn.execute("ALTER TABLE users ADD COLUMN provider TEXT DEFAULT 'openrouter'")
-        
-        if 'selected_model' not in columns:
-            logger.info("🔄 Миграция: добавляю колонку 'selected_model'")
-            conn.execute("ALTER TABLE users ADD COLUMN selected_model TEXT DEFAULT '1'")
-
+    conn = sqlite3.connect(DB_PATH)
+    cursor = conn.cursor()
+    
+    cursor.execute('''
+        CREATE TABLE IF NOT EXISTS users (
+            user_id INTEGER PRIMARY KEY,
+            username TEXT,
+            requests_today INTEGER DEFAULT 0,
+            last_request_date TEXT,
+            created_at TEXT DEFAULT CURRENT_TIMESTAMP
+        )
+    ''')
+    
+    cursor.execute('''
+        CREATE TABLE IF NOT EXISTS requests (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            user_id INTEGER,
+            request_type TEXT,
+            prompt TEXT,
+            response TEXT,
+            created_at TEXT DEFAULT CURRENT_TIMESTAMP,
+            FOREIGN KEY (user_id) REFERENCES users(user_id)
+        )
+    ''')
+    
+    conn.commit()
+    conn.close()
 
 def save_user(user_id: int, username: str = None):
-    """Сохранить пользователя и увеличить счётчик запросов"""
-    with sqlite3.connect(DB_PATH) as conn:
-        conn.execute(
-            "INSERT OR IGNORE INTO users (user_id, username) VALUES (?, ?)",
-            (user_id, username)
-        )
-        conn.execute(
-            "UPDATE users SET requests = requests + 1 WHERE user_id = ?",
-            (user_id,)
-        )
+    conn = sqlite3.connect(DB_PATH)
+    cursor = conn.cursor()
+    
+    cursor.execute('''
+        INSERT OR IGNORE INTO users (user_id, username) 
+        VALUES (?, ?)
+    ''', (user_id, username))
+    
+    conn.commit()
+    conn.close()
 
+def get_user_requests_today(user_id: int) -> int:
+    conn = sqlite3.connect(DB_PATH)
+    cursor = conn.cursor()
+    
+    today = datetime.now().date()
+    cursor.execute('''
+        SELECT requests_today FROM users 
+        WHERE user_id = ? AND date(last_request_date) = ?
+    ''', (user_id, str(today)))
+    
+    result = cursor.fetchone()
+    conn.close()
+    
+    return result[0] if result else 0
 
-def get_user_provider(user_id: int) -> str:
-    """Получить выбранного провайдера"""
-    with sqlite3.connect(DB_PATH) as conn:
-        cursor = conn.execute(
-            "SELECT provider FROM users WHERE user_id = ?",
-            (user_id,)
-        )
-        result = cursor.fetchone()
-        return result[0] if result and result[0] else 'openrouter'
+def increment_request_count(user_id: int):
+    conn = sqlite3.connect(DB_PATH)
+    cursor = conn.cursor()
+    
+    today = datetime.now().isoformat()
+    cursor.execute('''
+        UPDATE users 
+        SET requests_today = requests_today + 1, last_request_date = ?
+        WHERE user_id = ?
+    ''', (today, user_id))
+    
+    conn.commit()
+    conn.close()
 
-
-def set_user_provider(user_id: int, provider: str):
-    """Установить провайдера"""
-    with sqlite3.connect(DB_PATH) as conn:
-        conn.execute(
-            "UPDATE users SET provider = ? WHERE user_id = ?",
-            (provider, user_id)
-        )
-
-
-def get_user_model(user_id: int) -> str:
-    """Получить выбранную модель пользователя"""
-    with sqlite3.connect(DB_PATH) as conn:
-        cursor = conn.execute(
-            "SELECT selected_model FROM users WHERE user_id = ?",
-            (user_id,)
-        )
-        result = cursor.fetchone()
-        return result[0] if result and result[0] else '1'
-
-
-def set_user_model(user_id: int, model_key: str):
-    """Установить выбранную модель для пользователя"""
-    with sqlite3.connect(DB_PATH) as conn:
-        conn.execute(
-            "UPDATE users SET selected_model = ? WHERE user_id = ?",
-            (model_key, user_id)
-        )
+def save_request(user_id: int, request_type: str, prompt: str, response: str):
+    conn = sqlite3.connect(DB_PATH)
+    cursor = conn.cursor()
+    
+    cursor.execute('''
+        INSERT INTO requests (user_id, request_type, prompt, response)
+        VALUES (?, ?, ?, ?)
+    ''', (user_id, request_type, prompt, response))
+    
+    conn.commit()
+    conn.close()
