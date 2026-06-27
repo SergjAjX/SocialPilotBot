@@ -3,6 +3,7 @@ import logging
 import os
 from pathlib import Path
 from dotenv import load_dotenv
+from aiohttp import web  # Добавляем aiohttp web
 
 # Load .env only for local development
 if not os.getenv("RAILWAY_ENVIRONMENT"):
@@ -19,6 +20,7 @@ logger = logging.getLogger(__name__)
 BOT_TOKEN = os.getenv("BOT_TOKEN")
 OPENROUTER_API_KEY = os.getenv("OPENROUTER_API_KEY")
 CHANNEL_URL = os.getenv("CHANNEL_URL", "https://t.me/hvost_v_fokuse")
+PORT = int(os.getenv("PORT", 8080))  # Railway передает порт в переменной PORT
 
 if not BOT_TOKEN:
     raise ValueError("BOT_TOKEN not found! Add to .env or environment variables")
@@ -30,6 +32,20 @@ from aiogram.types import BotCommand
 from bot.handlers import start, commands
 from bot.database.db import init_db
 
+# --- Фиктивный веб-сервер для Railway ---
+async def handle_healthcheck(request):
+    return web.Response(text="OK")
+
+async def run_web_server():
+    app = web.Application()
+    app.router.add_get('/', handle_healthcheck)
+    runner = web.AppRunner(app)
+    await runner.setup()
+    site = web.TCPSite(runner, '0.0.0.0', PORT)
+    await site.start()
+    logger.info(f"Healthcheck server started on port {PORT}")
+
+# --- Основной код бота ---
 async def set_commands(bot: Bot):
     commands_list = [
         BotCommand(command="start", description="Запустить бота"),
@@ -54,6 +70,9 @@ async def main():
     
     await set_commands(bot)
     await bot.delete_webhook(drop_pending_updates=True)
+    
+    # Запускаем healthcheck-сервер параллельно
+    await run_web_server()
     
     logger.info("✅ SocialPilotBot запущен!")
     
