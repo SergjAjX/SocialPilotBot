@@ -12,10 +12,10 @@ router = Router()
 
 
 def _get_current_settings(user_id: int) -> tuple:
-    """Получить текущие настройки пользователя"""
+    """Get current user settings"""
     provider = get_user_provider(user_id)
     model_key = get_user_model(user_id)
-    provider_name = "🌐 OpenRouter" if provider == "openrouter" else "🤗 Hugging Face"
+    provider_name = "OpenRouter" if provider == "openrouter" else "Hugging Face"
     
     if provider == "openrouter":
         model_name = OR_MODELS.get(model_key, OR_MODELS['1'])['name']
@@ -27,40 +27,39 @@ def _get_current_settings(user_id: int) -> tuple:
 
 @router.message(Command("start"))
 async def cmd_start(message: types.Message):
-    """Главное приветствие бота"""
+    """Main welcome message"""
     save_user(message.from_user.id, message.from_user.username)
     
     provider_name, model_name = _get_current_settings(message.from_user.id)
     
     keyboard = InlineKeyboardMarkup(inline_keyboard=[
-        [InlineKeyboardButton(text="📢 Подписаться на канал", url="https://t.me/hvost_v_fokuse")],
+        [InlineKeyboardButton(text="Subscribe to channel", url="https://t.me/hvost_v_fokuse")],
         [
-            InlineKeyboardButton(text="🤖 Модели", callback_data="show_models"),
-            InlineKeyboardButton(text="⚙️ Настройки", callback_data="settings")
+            InlineKeyboardButton(text="Models", callback_data="show_models"),
+            InlineKeyboardButton(text="Settings", callback_data="settings")
         ],
-        [InlineKeyboardButton(text="💡 Сгенерировать идею", callback_data="quick_idea")]
+        [InlineKeyboardButton(text="Generate idea", callback_data="quick_idea")]
     ])
     
     welcome_text = (
-        f"👋 <b>Привет, {message.from_user.first_name}!</b>\n\n"
-        f"🎯 <b>Я SocialPilotBot — твой AI-ассистент для SMM</b>\n\n"
-        f"📊 <b>Что я умею:</b>\n"
-        f"• 💡 Генерировать идеи для постов\n"
-        f"• ✨ Оптимизировать тексты для соцсетей\n"
-        f"• 🎨 Создавать контент-планы\n"
-        f"• 📝 Писать посты на любую тему\n\n"
-        f"🤖 <b>Доступно 9 AI моделей:</b>\n"
-        f"• 5 моделей через OpenRouter\n"
-        f"• 4 модели Hugging Face\n\n"
-        f"⚙️ <b>Твои настройки:</b>\n"
-        f"📡 Провайдер: {provider_name}\n"
-        f"🤖 Модель: {model_name}\n\n"
-        f"📢 <b>Подпишись на канал</b> — там советы по SMM и маркетингу!\n\n"
-        f"💡 <b>Команды:</b>\n"
-        f"/idea &lt;тема&gt; — идеи для поста\n"
-        f"/optimize &lt;текст&gt; — улучшить текст\n"
-        f"/model — выбрать модель\n"
-        f"/provider — сменить провайдера"
+        f"Hi, {message.from_user.first_name}!\n\n"
+        f"I'm SocialPilotBot - your AI assistant for SMM\n\n"
+        f"What I can do:\n"
+        f"- Generate post ideas\n"
+        f"- Optimize texts for social media\n"
+        f"- Create content plans\n"
+        f"- Write posts on any topic\n\n"
+        f"Available 9 AI models:\n"
+        f"- 5 models via OpenRouter\n"
+        f"- 4 models Hugging Face\n\n"
+        f"Your settings:\n"
+        f"Provider: {provider_name}\n"
+        f"Model: {model_name}\n\n"
+        f"Commands:\n"
+        f"/idea <topic> - post ideas\n"
+        f"/optimize <text> - improve text\n"
+        f"/model - select model\n"
+        f"/provider - change provider"
     )
     
     await message.answer(
@@ -73,35 +72,33 @@ async def cmd_start(message: types.Message):
 
 @router.callback_query(F.data == "show_models")
 async def show_models_callback(callback: types.CallbackQuery):
-    """Показать список моделей"""
+    """Show models list"""
     provider = get_user_provider(callback.from_user.id)
     current_model = get_user_model(callback.from_user.id)
     
     if provider == "openrouter":
         current_name = OR_MODELS.get(current_model, OR_MODELS['1'])['name']
-        text = f"🎯 <b>Текущая модель:</b> {current_name}\n\n"
-        text += "🌐 <b>Модели OpenRouter:</b>\n\n"
+        text = f"Current model: {current_name}\n\n"
+        text += "OpenRouter Models:\n\n"
         for key, data in OR_MODELS.items():
             text += f"<b>{key}.</b> {data['name']}\n"
             text += f"   {data['description']}\n"
-            text += f"   📏 Контекст: {data['context']}\n\n"
+            text += f"   Context: {data['context']}\n\n"
     else:
         current_name = HF_MODELS.get(current_model, HF_MODELS['1'])['name']
-        text = f"🎯 <b>Текущая модель:</b> {current_name}\n\n"
-        text += "🤗 <b>Модели Hugging Face:</b>\n\n"
+        text = f"Current model: {current_name}\n\n"
+        text += "Hugging Face Models:\n\n"
         for key, data in HF_MODELS.items():
             text += f"<b>{key}.</b> {data['name']}\n"
             text += f"   {data['description']}\n"
-            text += f"   📏 Контекст: {data['context']}\n\n"
+            text += f"   Context: {data['context']}\n\n"
     
-    text += "💡 Используй /model &lt;номер&gt; для выбора\n\n"
-    text += "[◀️ Назад](/start)"
+    text += "Use /model <number> to select\n\n"
+    text += "[Back](/start)"
     
-    # ✅ ИСПРАВЛЕНО: используем edit_text вместо answer
     try:
         await callback.message.edit_text(text, parse_mode="HTML")
     except Exception:
-        # Если edit не сработал, отправляем новое сообщение
         await callback.message.answer(text, parse_mode="HTML")
     
     await callback.answer()
@@ -109,25 +106,24 @@ async def show_models_callback(callback: types.CallbackQuery):
 
 @router.callback_query(F.data == "settings")
 async def show_settings(callback: types.CallbackQuery):
-    """Показать настройки"""
+    """Show settings"""
     provider_name, model_name = _get_current_settings(callback.from_user.id)
     
     keyboard = InlineKeyboardMarkup(inline_keyboard=[
         [
-            InlineKeyboardButton(text="🌐 OpenRouter", callback_data="set_provider_openrouter"),
-            InlineKeyboardButton(text="🤗 Hugging Face", callback_data="set_provider_hf")
+            InlineKeyboardButton(text="OpenRouter", callback_data="set_provider_openrouter"),
+            InlineKeyboardButton(text="Hugging Face", callback_data="set_provider_hf")
         ],
-        [InlineKeyboardButton(text="◀️ Назад", callback_data="back_to_start")]
+        [InlineKeyboardButton(text="Back", callback_data="back_to_start")]
     ])
     
     text = (
-        f"⚙️ <b>Настройки:</b>\n\n"
-        f"📡 <b>Провайдер:</b> {provider_name}\n"
-        f"🤖 <b>Модель:</b> {model_name}\n\n"
-        f"Выбери провайдера:"
+        f"Settings:\n\n"
+        f"Provider: {provider_name}\n"
+        f"Model: {model_name}\n\n"
+        f"Choose provider:"
     )
     
-    # ✅ ИСПРАВЛЕНО: используем edit_text
     try:
         await callback.message.edit_text(text, parse_mode="HTML", reply_markup=keyboard)
     except Exception:
@@ -138,73 +134,70 @@ async def show_settings(callback: types.CallbackQuery):
 
 @router.callback_query(F.data == "set_provider_openrouter")
 async def set_provider_or(callback: types.CallbackQuery):
-    """Установить OpenRouter"""
+    """Set OpenRouter"""
     set_user_provider(callback.from_user.id, "openrouter")
     set_user_model(callback.from_user.id, "1")
     
     text = (
-        "✅ <b>Провайдер изменён!</b>\n\n"
-        "🌐 Теперь используется: <b>OpenRouter</b>\n"
-        f"🤖 Модель: {OR_MODELS['1']['name']}"
+        f"Provider changed!\n\n"
+        f"Now using: OpenRouter\n"
+        f"Model: {OR_MODELS['1']['name']}"
     )
     
-    # ✅ ИСПРАВЛЕНО: используем edit_text
     try:
         await callback.message.edit_text(text, parse_mode="HTML")
     except Exception:
         await callback.message.answer(text, parse_mode="HTML")
     
-    await callback.answer("✅ OpenRouter активирован!")
+    await callback.answer("OpenRouter activated!")
 
 
 @router.callback_query(F.data == "set_provider_hf")
 async def set_provider_hf(callback: types.CallbackQuery):
-    """Установить Hugging Face"""
+    """Set Hugging Face"""
     set_user_provider(callback.from_user.id, "huggingface")
     set_user_model(callback.from_user.id, "1")
     
     text = (
-        "✅ <b>Провайдер изменён!</b>\n\n"
-        "🤗 Теперь используется: <b>Hugging Face</b>\n"
-        f"🤖 Модель: {HF_MODELS['1']['name']}"
+        f"Provider changed!\n\n"
+        f"Now using: Hugging Face\n"
+        f"Model: {HF_MODELS['1']['name']}"
     )
     
-    # ✅ ИСПРАВЛЕНО: используем edit_text
     try:
         await callback.message.edit_text(text, parse_mode="HTML")
     except Exception:
         await callback.message.answer(text, parse_mode="HTML")
     
-    await callback.answer("✅ Hugging Face активирован!")
+    await callback.answer("Hugging Face activated!")
 
 
 @router.callback_query(F.data == "back_to_start")
 async def back_to_start(callback: types.CallbackQuery):
-    """Вернуться к старту — редактируем текущее сообщение"""
+    """Back to start"""
     provider_name, model_name = _get_current_settings(callback.from_user.id)
     
     keyboard = InlineKeyboardMarkup(inline_keyboard=[
-        [InlineKeyboardButton(text="📢 Подписаться на канал", url="https://t.me/hvost_v_fokuse")],
+        [InlineKeyboardButton(text="Subscribe to channel", url="https://t.me/hvost_v_fokuse")],
         [
-            InlineKeyboardButton(text="🤖 Модели", callback_data="show_models"),
-            InlineKeyboardButton(text="⚙️ Настройки", callback_data="settings")
+            InlineKeyboardButton(text="Models", callback_data="show_models"),
+            InlineKeyboardButton(text="Settings", callback_data="settings")
         ],
-        [InlineKeyboardButton(text="💡 Сгенерировать идею", callback_data="quick_idea")]
+        [InlineKeyboardButton(text="Generate idea", callback_data="quick_idea")]
     ])
     
     welcome_text = (
-        f"👋 <b>Привет, {callback.from_user.first_name}!</b>\n\n"
-        f"⚙️ <b>Твои настройки:</b>\n"
-        f"📡 Провайдер: {provider_name}\n"
-        f"🤖 Модель: {model_name}\n\n"
-        f"💡 <b>Команды:</b>\n"
-        f"/idea &lt;тема&gt; — идеи для поста\n"
-        f"/optimize &lt;текст&gt; — улучшить текст\n"
-        f"/model — выбрать модель\n"
-        f"/provider — сменить провайдера"
+        f"Hi, {callback.from_user.first_name}!\n\n"
+        f"Your settings:\n"
+        f"Provider: {provider_name}\n"
+        f"Model: {model_name}\n\n"
+        f"Commands:\n"
+        f"/idea <topic> - post ideas\n"
+        f"/optimize <text> - improve text\n"
+        f"/model - select model\n"
+        f"/provider - change provider"
     )
     
-    # ✅ ИСПРАВЛЕНО: используем edit_text вместо answer
     try:
         await callback.message.edit_text(
             welcome_text,
@@ -212,7 +205,6 @@ async def back_to_start(callback: types.CallbackQuery):
             reply_markup=keyboard
         )
     except Exception:
-        # Если edit не сработал (например, сообщение старое), отправляем новое
         await callback.message.answer(
             welcome_text,
             parse_mode="HTML",
@@ -224,18 +216,17 @@ async def back_to_start(callback: types.CallbackQuery):
 
 @router.callback_query(F.data == "quick_idea")
 async def quick_idea(callback: types.CallbackQuery):
-    """Быстрая генерация идеи"""
+    """Quick idea generation"""
     text = (
-        "💡 <b>Введи тему для генерации идей:</b>\n\n"
-        "Например: фитнес, маркетинг, путешествия\n\n"
-        "Используй команду: /idea &lt;твоя тема&gt;"
+        f"Enter topic for ideas:\n\n"
+        f"Example: fitness, marketing, travel\n\n"
+        f"Use command: /idea <your topic>"
     )
     
     keyboard = InlineKeyboardMarkup(inline_keyboard=[
-        [InlineKeyboardButton(text="◀️ Назад", callback_data="back_to_start")]
+        [InlineKeyboardButton(text="Back", callback_data="back_to_start")]
     ])
     
-    # ✅ ИСПРАВЛЕНО: используем edit_text
     try:
         await callback.message.edit_text(text, parse_mode="HTML", reply_markup=keyboard)
     except Exception:
