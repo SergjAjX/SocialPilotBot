@@ -87,4 +87,4 @@ async def generate_idea(message: types.Message):
         )
     except Exception as e:
         await message.answer(f"❌ Ошибка генерации: {type(e).__name__}")
-```
+
