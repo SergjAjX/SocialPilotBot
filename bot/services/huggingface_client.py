@@ -154,4 +154,4 @@ class HuggingFaceClient:
         except Exception as e:
             logger.error(f"❌ HF {model_name}: {type(e).__name__}: {e}")
             return f"❌ Ошибка соединения: {type(e).__name__}"
-```
+
